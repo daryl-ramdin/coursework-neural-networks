@@ -2,6 +2,8 @@ import numpy
 import numpy as np
 import math
 from scipy.stats import truncnorm
+from sklearn import datasets as ds
+from sklearn import metrics
 import matplotlib.pyplot as plt
 
 from sklearn.datasets import make_blobs
@@ -13,7 +15,7 @@ from sklearn.model_selection import train_test_split
 
 @np.vectorize
 def sigmoid(x):
-    return 1.0/(1.0+np.e ** -x)
+    return 1.0/(1.0+np.exp(-x))
 
 @np.vectorize
 def derive_sigmoid(x):
@@ -37,18 +39,18 @@ class ActivationFunction:
 class SigmoidActivation(ActivationFunction):
 
     def apply(self,x):
-        return sigmoid(x)
+        return 1.0/(1.0+np.exp(-x))
 
     def derivative(self,x):
-        return derive_sigmoid(x)
+        return x * (1.0 - x)
 
 class ReluActivation(ActivationFunction):
 
     def apply(self,x):
-        return relu(x)
+        return max(0,x)
 
     def derivative(self,x):
-        return derive_relu(x)
+        return x>0
 
 class LinearActivation(ActivationFunction):
     def __init__(self,m,c):
@@ -60,6 +62,19 @@ class LinearActivation(ActivationFunction):
 
     def derivative(self,x):
         return (x*self.m)/self.m
+
+class SoftmaxActivation(ActivationFunction):
+    def apply(self,x):
+        x_shift = x - np.max(x)
+        ex = np.exp(x_shift)
+        return ex / ex.sum()
+
+    def derivative(self,x):
+        s = self.apply(x).T
+        d_sm =  np.diag(s) - np.dot(s, s.T)
+        d_sm.transpose()
+        print(d_sm.shape)
+        return d_sm
 
 class Layer:
 
@@ -148,7 +163,7 @@ class HiddenLayer(Layer):
         return self.active_weights.shape
 
     def forward_propagate(self):
-        if self.activated == False: return
+        #if self.activated == False: return
         super().forward_propagate()
         self.weighted_input = np.dot(self.active_weights, self.back_layer.forward_output.T) # number_nodes x samples
         self.forward_output = self.activation_function.apply(self.weighted_input) # number_nodes x samples
@@ -160,26 +175,19 @@ class HiddenLayer(Layer):
         #We need to get loss wrt to this layer'w weight
         # If this is layer i, then
         # delta delta_l_w{i} = delta_l_z{i+1} * delta_z{i+1}_a{i} * delta_a{i}_z{i} * delta_z{i}_w{i}
-        if self.activated == False: return
+        #if self.activated == False: return
 
         super().back_propagate()
-        self.front_d_l_z = self.front_layer.delta_l_z()  # number_nodes_front_layer x 1
-
+        self.front_d_l_z = self.front_layer.delta_l_z()  # number of samples x number_nodes_front_layer
         self.front_d_z_a = self.front_layer.delta_z_a()      # number_nodes_front_layer x number_nodes
-
-        self.d_a_z = self.activation_function.derivative(self.forward_output) # number of nodes x 1
-
-        self.d_z_w = self.back_layer.forward_output # number_nodes_back_layer x number_samples
-
+        self.d_a_z = self.activation_function.derivative(self.forward_output) # number_of_samples x number_of_nodes
+        self.d_z_w = self.back_layer.forward_output # number_samples x number_nodes_back_layer
         #Let's do d_l_z2 * d_z2_a = d_l_a
-        self.d_l_a = np.dot(self.front_d_l_z,self.front_d_z_a, ) # number_samples x number of nodes
-
+        self.d_l_a = np.dot(self.front_d_l_z,self.front_d_z_a, ) # number_samples x number_of_nodes
         #Next is d_l_a * d_a_z = d_l_z
-        self.d_l_z = self.d_l_a * self.d_a_z   # number_nodes x number of samples
-
+        self.d_l_z = self.d_l_a * self.d_a_z   # number_of_samples x number_of_nodes
         #Next is d_l_z * d_z_w = d_l_w
-        self.d_l_w = np.dot(self.d_l_z.T,self.d_z_w)     # number_samples x number_nodes_back_layer
-
+        self.d_l_w = np.dot(self.d_l_z.T,self.d_z_w)     # number_of_nodes x number_nodes_back_layer
         #self.active_weights += self.learning_rate * self.d_l_w
 
     def update_active_weights(self):
@@ -189,16 +197,16 @@ class HiddenLayer(Layer):
         return self.d_l_w # number_nodes x number_nodes_back_layer
 
     def delta_a_z(self):
-        return self.d_a_z # number of nodes x 1
+        return self.d_a_z # number_of_samples x number_of_nodes
 
     def delta_z_w(self):
-        return self.d_z_w # number_nodes_back_layer x 1
+        return self.d_z_w # number_of_samples x number_nodes_back_layer
 
     def delta_z_a(self):
-        return self.active_weights # number_of_active_nodes x number_of_active_nodes_back_layer
+        return self.active_weights # number_of_nodes x number_of_nodes_back_layer
 
     def delta_l_z(self):
-        return self.d_l_z  #number of nodes x number of nodes in front
+        return self.d_l_z  # number_of_samples x number_of_nodes
 
 class OutputLayer(Layer):
     def __init__(self, layer_id: str, number_of_active_nodes: int, activation_function: ActivationFunction, learning_rate: float, back_layer: Layer,target: np.array):
@@ -219,37 +227,37 @@ class OutputLayer(Layer):
     def forward_propagate(self):
         if self.activated == False: return
         super().forward_propagate()
-        self.weighted_input = np.dot(self.active_weights, self.back_layer.forward_output.T) #number_of_active_nodes x number_of_samples
-        self.activation_output = self.activation_function.apply(self.weighted_input) #number_of_nodfed x numnber of samples
-        self.activation_output = np.transpose(self.activation_output)
+        self.weighted_input = np.dot(self.active_weights, self.back_layer.forward_output.T) #number_of_nodes x number_of_samples
+        self.activation_output = self.activation_function.apply(self.weighted_input) #number_of_nodes x number of samples
+        self.activation_output = np.transpose(self.activation_output) #number of samples x number_of_nodes
         super().update_history()
         return
 
     def back_propagate(self):
         if self.activated == False: return
         super().back_propagate()
-        self.d_l_a = self.target - self.activation_output #number of nodes
-        self.d_a_z = self.activation_function.derivative(self.activation_output) #number of nodes
-        self.d_z_w = self.back_layer.forward_output #number_nodes_back_layer
-        self.d_l_z = self.d_l_a * self.d_a_z #number of nodes
-        self.d_l_w = np.dot(self.d_l_z.T,self.d_z_w) # number_of_active_nodes x number_nodes_back_layer
+        self.d_l_a = self.target - self.activation_output # number_of_samples x number_of_nodes
+        self.d_a_z = self.activation_function.derivative(self.activation_output) # number_of_samples x number_of_nodes
+        self.d_z_w = self.back_layer.forward_output #number_of_samples x number_nodes_back_layer
+        self.d_l_z = self.d_l_a * self.d_a_z # number_of_samples x number_of_nodes
+        self.d_l_w = np.dot(self.d_l_z.T,self.d_z_w) # number_of_nodes x number_nodes_back_layer
         #self.active_weights += self.learning_rate*self.d_l_w # number_of_active_nodes x number_nodes_back_layer
 
     def update_active_weights(self):
-        self.active_weights += self.learning_rate * self.d_l_w  # number_of_active_nodes x number_nodes_back_layer
-        for i in range(len(self.active_weights)):
-            self.weights[self.active_weight_indices[i]] = self.active_weights[i]
+        self.active_weights += self.learning_rate * self.d_l_w  # number_of_nodes x number_nodes_back_layer
+        #for i in range(len(self.active_weights)):
+            #self.weights[self.active_weight_indices[i]] = self.active_weights[i]
     def delta_l_a(self):
-        return self.d_l_a #number of nodes
+        return self.d_l_a # number_of_samples x number of nodes
 
     def delta_a_z(self):
-        return self.d_a_z #number of nodes
+        return self.d_a_z # number_of_samples x number of nodes
 
     def delta_z_w(self):
-        return self.d_z_w #number_nodes_back_layer
+        return self.d_z_w # number_of_samples x number_nodes_back_layer
 
     def delta_l_z(self):
-        return self.d_l_z #number of nodes
+        return self.d_l_z # number_of_samples x number of nodes
 
     def delta_z_a(self):
         return self.active_weights #number of nodes x number_nodes_back_layer
@@ -328,20 +336,44 @@ class NeuralNetwork:
 
 
 
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder
+digits = ds.load_digits()
+X = digits.data
+y = digits.target
+print("Xshape",X.shape)
+print("Target shape",y.shape)
+y = np.reshape(y,(-1,1))
+print("Target shape",y.shape)
+
+onehot_encoder = OneHotEncoder(sparse=False)
+y = onehot_encoder.fit_transform(y)
+print("Hot Encoded shape", y.shape)
+
+
+'''
 X, y = make_blobs( n_samples=5000, n_features=3, centers=((1, 1,1), (5, 5,5)), cluster_std = 2, random_state=42)
+
 X = StandardScaler().fit_transform(X)
 y = np.reshape(y,(-1,1))
+'''
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+
+
+
+print("X train shape:", X_train.shape)
+print("Y train shape:", y_train.shape)
 
 nn = NeuralNetwork()
 h1a = SigmoidActivation()
 h2a = ReluActivation()
 oa = SigmoidActivation()
-no_input_nodes = 3
+no_input_nodes = 64
 h1_nodes = 4
 h2_nodes = 5
-no_out_nodes = 1
+no_out_nodes = 10
 
 input = InputLayer("In1",no_input_nodes, X_train)
 h1 = HiddenLayer("H1",h1_nodes,h1a,0.01,input)
@@ -352,17 +384,25 @@ nn.add_hidden(h1)
 nn.add_output(output)
 nn.build()
 
-nn.train(X,y,100)
+nn.train(X,y,2)
 
-y_hat = nn.run(X_test)
+y_pred= nn.run(X_test)
 
-y_hat[y_hat >0.5]=1
-y_hat[y_hat<0.5] =0
-print(sum(y_hat==y_test)/len(y_hat))
+'''
+y_hat = np.argmax(y_pred, axis=0)
+y_test = np.argmax(y_test, axis=1)
+accuracy = (y_hat == y_test).mean()
+print(accuracy * 100)
 
+ax = plt.subplot(projection='3d')
+ax.scatter3D( X_test[:,0], X_test[:,1], X_test[:,2], c=y_pred)
+plt.show()
+'''
+'''
 ax = plt.subplot(projection='3d')
 ax.scatter3D( X_test[:,0], X_test[:,1], X_test[:,2], c=y_hat)
 plt.show()
+'''
 
 
 
