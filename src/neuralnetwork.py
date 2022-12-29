@@ -67,18 +67,14 @@ class SoftmaxActivation(ActivationFunction):
     def apply(self,x):
         x_shift = x - np.max(x)
         ex = np.exp(x_shift)
-        return ex / ex.sum()
+        return ex / ex.sum(axis=0, keepdims=True)
 
     def derivative(self,x):
-        s = self.apply(x).T
-        d_sm =  np.diag(s) - np.dot(s, s.T)
-        d_sm.transpose()
-        print(d_sm.shape)
-        return d_sm
+        return None
 
 class Layer:
 
-    def __init__(self, layer_id: str, number_of_nodes: int):
+    def __init__(self, layer_id: str, number_of_nodes: int, number_of_samples: int):
         self.activated= True
         self.number_of_nodes = number_of_nodes
         self.number_of_active_nodes = self.number_of_nodes
@@ -90,6 +86,7 @@ class Layer:
         self.weight_history = np.empty([0]).astype(float)
         self.activation_history = np.empty([0]).astype(float)
         self.epoch = 0
+        self.n = number_of_samples
 
     def describe(self):
         print("Layer ID: ", self.layer_id)
@@ -130,8 +127,8 @@ class Layer:
         return
 
 class InputLayer(Layer):
-    def __init__(self,layer_id,number_of_active_nodes,data: np.array):
-        super().__init__(layer_id, number_of_active_nodes)
+    def __init__(self,layer_id,number_of_active_nodes,data: np.array,number_of_samples: int):
+        super().__init__(layer_id, number_of_active_nodes, number_of_samples)
         self.forward_output = data
 
     def describe(self):
@@ -141,7 +138,7 @@ class InputLayer(Layer):
 
 class HiddenLayer(Layer):
     def __init__(self,layer_id, number_of_active_nodes: int, activation_function: ActivationFunction, learning_rate,back_layer: Layer):
-        super().__init__(layer_id, number_of_active_nodes)
+        super().__init__(layer_id, number_of_active_nodes,back_layer.n)
         self.activation_function = activation_function
         self.back_layer = back_layer
         self.front_layer = None
@@ -171,7 +168,7 @@ class HiddenLayer(Layer):
         #super().update_history()
         return
 
-    def backward_propagate(self):
+    def backward_propagate_old(self):
         #We need to get loss wrt to this layer'w weight
         # If this is layer i, then
         # delta delta_l_w{i} = delta_l_z{i+1} * delta_z{i+1}_a{i} * delta_a{i}_z{i} * delta_z{i}_w{i}
@@ -190,9 +187,27 @@ class HiddenLayer(Layer):
         self.d_l_w = np.dot(self.d_l_z.T,self.d_z_w)     # number_of_nodes x number_nodes_back_layer
         #self.active_weights += self.learning_rate * self.d_l_w
 
-    def update_active_weights(self):
-        self.active_weights += self.learning_rate * self.d_l_w  # number_of_active_nodes x number_nodes_back_layer
+    def backward_propagate(self):
+        #We need to get loss wrt to this layer'w weight
+        # If this is layer i, then
+        # delta delta_l_w{i} = delta_l_z{i+1} * delta_z{i+1}_a{i} * delta_a{i}_z{i} * delta_z{i}_w{i}
+        #if self.activated == False: return
 
+        super().back_propagate()
+        self.front_d_l_z = self.front_layer.delta_l_z()  # number of samples x number_nodes_front_layer
+        self.front_d_z_a = self.front_layer.delta_z_a()      # number_nodes_front_layer x number_nodes
+        # Get d_l_a
+        self.d_l_a = np.dot(self.front_d_l_z, self.front_d_z_a)  # number_samples x number_of_nodes
+        # Get d_a_z
+        self.d_a_z = self.activation_function.derivative(self.forward_output) # number_of_samples x number_of_nodes
+        # Get d_l_z
+        self.d_l_z = self.d_l_a * self.d_a_z  # number_of_samples x number_of_nodes
+        # Finally d_l_w, Note self.back_layer.forward_output = d_z_w
+        self.d_l_w = np.dot(self.d_l_z.T, self.back_layer.forward_output)/self.n  # number_of_nodes x number_nodes_back_layer
+
+    def update_active_weights(self):
+        #self.active_weights += self.learning_rate * self.d_l_w  # number_of_active_nodes x number_nodes_back_layer
+        self.active_weights = self.active_weights - (self.learning_rate * self.d_l_w) # number_of_active_nodes x number_nodes_back_layer
     def delta_l_w(self):
         return self.d_l_w # number_nodes x number_nodes_back_layer
 
@@ -210,7 +225,7 @@ class HiddenLayer(Layer):
 
 class OutputLayer(Layer):
     def __init__(self, layer_id: str, number_of_active_nodes: int, activation_function: ActivationFunction, learning_rate: float, back_layer: Layer,target: np.array):
-        super().__init__(layer_id, number_of_active_nodes)
+        super().__init__(layer_id, number_of_active_nodes,back_layer.n)
         self.activation_function = activation_function
         self.activation_output = np.empty([0]).astype(float)
         self.learning_rate = learning_rate
@@ -233,7 +248,7 @@ class OutputLayer(Layer):
         super().update_history()
         return
 
-    def back_propagate(self):
+    def back_propagate_old(self):
         if self.activated == False: return
         super().back_propagate()
         self.d_l_a = self.target - self.activation_output # number_of_samples x number_of_nodes
@@ -243,8 +258,16 @@ class OutputLayer(Layer):
         self.d_l_w = np.dot(self.d_l_z.T,self.d_z_w) # number_of_nodes x number_nodes_back_layer
         #self.active_weights += self.learning_rate*self.d_l_w # number_of_active_nodes x number_nodes_back_layer
 
+    def back_propagate(self):
+        if self.activated == False: return
+        super().back_propagate()
+        self.d_l_z = self.activation_output - self.target # number_of_samples x number_of_nodes
+
+        #Get d_l_w = d_l_z . d_z_w. Note d_z_w = self.back_layer.forward_output
+        self.d_l_w = np.dot(self.d_l_z.T,self.back_layer.forward_output)/self.n  # number_of_nodes x number_nodes_back_layer
+
     def update_active_weights(self):
-        self.active_weights += self.learning_rate * self.d_l_w  # number_of_nodes x number_nodes_back_layer
+        self.active_weights = self.active_weights - (self.learning_rate * self.d_l_w)  # number_of_nodes x number_nodes_back_layer
         #for i in range(len(self.active_weights)):
             #self.weights[self.active_weight_indices[i]] = self.active_weights[i]
     def delta_l_a(self):
@@ -266,6 +289,7 @@ class NeuralNetwork:
 
     def __init__(self):
         self.hidden_layers = np.empty([0]).astype(HiddenLayer)
+        self.cross_entropy_loss = []
 
     def add_input(self,input_layer: InputLayer):
         self.input_layer = input_layer
@@ -295,6 +319,8 @@ class NeuralNetwork:
         for l in self.hidden_layers:
             l.forward_propagate()
         self.output_layer.forward_propagate()
+        cost = -np.mean(self.output_layer.target * np.log(self.output_layer.activation_output + 1e-8))
+        self.cross_entropy_loss.append(cost)
 
     def backward_propagate(self):
         self.output_layer.back_propagate()
@@ -317,6 +343,7 @@ class NeuralNetwork:
         for i in range(epochs):
             self.forward_propagate()
             self.backward_propagate()
+
         return
 
 
@@ -334,6 +361,9 @@ class NeuralNetwork:
 
         return input_vector.T
 
+    def predict(self,X):
+        self.input_layer.forward_output = X
+        self.forward_propagate()
 
 
 
@@ -344,15 +374,18 @@ X = digits.data
 y = digits.target
 print("Xshape",X.shape)
 print("Target shape",y.shape)
-y = np.reshape(y,(-1,1))
+#y = np.reshape(y,(-1,1))
 print("Target shape",y.shape)
 
+'''
 onehot_encoder = OneHotEncoder(sparse=False)
 y = onehot_encoder.fit_transform(y)
 print("Hot Encoded shape", y.shape)
 
 
-'''
+
+
+
 X, y = make_blobs( n_samples=5000, n_features=3, centers=((1, 1,1), (5, 5,5)), cluster_std = 2, random_state=42)
 
 X = StandardScaler().fit_transform(X)
@@ -361,21 +394,17 @@ y = np.reshape(y,(-1,1))
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
 
-
-
 print("X train shape:", X_train.shape)
 print("Y train shape:", y_train.shape)
 
 nn = NeuralNetwork()
 h1a = SigmoidActivation()
-h2a = ReluActivation()
-oa = SigmoidActivation()
+oa = SoftmaxActivation()
 no_input_nodes = 64
-h1_nodes = 4
-h2_nodes = 5
+h1_nodes = 50
 no_out_nodes = 10
 
-input = InputLayer("In1",no_input_nodes, X_train)
+input = InputLayer("In1",no_input_nodes, X_train,X_train.shape[0])
 h1 = HiddenLayer("H1",h1_nodes,h1a,0.01,input)
 output = OutputLayer("O1", no_out_nodes,oa,0.01,h1,y_train)
 
@@ -384,11 +413,16 @@ nn.add_hidden(h1)
 nn.add_output(output)
 nn.build()
 
-nn.train(X,y,2)
+nn.input_layer.layer_id = "changed"
 
-y_pred= nn.run(X_test)
+
+nn.train(X_train,y_train,1000)
+
+nn.predict(X_test)
+
 
 '''
+
 y_hat = np.argmax(y_pred, axis=0)
 y_test = np.argmax(y_test, axis=1)
 accuracy = (y_hat == y_test).mean()
@@ -397,8 +431,8 @@ print(accuracy * 100)
 ax = plt.subplot(projection='3d')
 ax.scatter3D( X_test[:,0], X_test[:,1], X_test[:,2], c=y_pred)
 plt.show()
-'''
-'''
+
+
 ax = plt.subplot(projection='3d')
 ax.scatter3D( X_test[:,0], X_test[:,1], X_test[:,2], c=y_hat)
 plt.show()
