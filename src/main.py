@@ -18,4 +18,7 @@ print(digits.target)
 
 w1 = 2*np.random.random((3,4)) - 1
 
-print(w1)
+#print(w1)
+
+for i in range(0,-1,-1):
+    print(i)
