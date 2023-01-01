@@ -281,6 +281,7 @@ np.random.seed(seed)
 
 grid = np.random.randint(0,9,size=(rows,columns))
 #grid = np.array([[0,0,0],[9,9,0],[0,0,0],[0,9,9],[0,0,0]])
+print(grid)
 my = Agent(grid, seed)
 
 iterations, shortest_path = my.RandomSearch()
