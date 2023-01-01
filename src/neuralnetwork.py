@@ -5,6 +5,8 @@ from scipy.stats import truncnorm
 from sklearn import datasets as ds
 from sklearn import metrics
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder
 
 from sklearn.datasets import make_blobs
 import matplotlib.pyplot as plt
@@ -431,8 +433,7 @@ class NeuralNetwork:
         print("Accuracy:", accuracy * 100)
         return
 
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder
+
 digits = ds.load_digits()
 X = digits.data
 y = digits.target
