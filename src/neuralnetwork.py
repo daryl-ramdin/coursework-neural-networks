@@ -20,6 +20,19 @@ class Optimizer:
     def optimize(self,w,learning_rate,dw):
         return
 
+    '''
+    Any initialization needed for dropouts
+    '''
+    def initialise_dropout(self,b_node_indices, node_indices):
+        return
+
+    '''
+    Some optimizers need to be aware of any dropouts that may be taking place
+    '''
+    def dropout(self,back_active_node_indices, active_node_indices,dw):
+        return
+
+
 class GradientDescentOptimizer(Optimizer):
     def optimize(self,w,learning_rate,dw):
         #Update the weights
@@ -29,15 +42,56 @@ class GradientDescentOptimizer(Optimizer):
 class AdamOptimizer(Optimizer):
     def __init__(self, beta1=0.9,beta2=0.99):
         super().__init__()
+        self.master_moment1 = np.array([0]).astype(float)
+        self.master_moment2 = np.array([0]).astype(float)
         self.moment1 = np.array([0]).astype(float)
         self.moment2 = np.array([0]).astype(float)
         self.beta1 = beta1
         self.beta2 = beta2
+        self.back_node_count = 0
+        self.node_count = 0
+        self.active_node_indices = np.array([0])
+        self.moments_created = False
+
+    def initialise_dropout(self,back_node_count, node_count):
+        if self.moments_created==True: return
+        self.moments_created = True
+        self.back_node_count = back_node_count
+        self.node_count = node_count
+        self.active_node_indices = np.array(range(0, self.node_count))
+        self.back_active_node_indices = np.array(range(0, self.back_node_count))
+        self.master_moment1 = np.zeros([self.node_count,self.back_node_count]).astype(float)
+        self.master_moment2 = np.zeros([self.node_count,self.back_node_count]).astype(float)
+
+    def dropout(self,back_active_node_indices, active_node_indices,dw):
+        self.back_active_node_indices = back_active_node_indices
+        self.active_node_indices = active_node_indices
+        self.moment1 = self.master_moment1[:, back_active_node_indices]
+        self.moment1 = self.moment1[active_node_indices, :]
+        self.moment2 = self.master_moment2[:, back_active_node_indices]
+        self.moment2 = self.moment2[active_node_indices, :]
+
 
     def optimize(self,w,learning_rate,dw):
-        self.moment1 = self.beta1 * self.moment1 + (1 - self.beta1) * dw
-        self.moment2 = self.beta1 * self.moment1 + (1 - self.beta1) * dw * dw
+        #Calculate the value of the active moments. As we are implementing
+        #dropout regularisation, we need to also drop out the corresponding
+        #moments associated with each weight
 
+        self.moment1 = self.beta1 * self.moment1 + (1 - self.beta1) * dw
+        self.moment2 = self.beta2 * self.moment2 + (1 - self.beta2) * np.square(dw)
+
+
+
+        #Update the master moments
+        temp = self.master_moment1.copy()[:,self.back_active_node_indices]
+        temp[self.active_node_indices] = self.moment1
+        self.master_moment1[:, self.back_active_node_indices] = temp
+
+        temp = self.master_moment2.copy()[:,self.back_active_node_indices]
+        temp[self.active_node_indices] = self.moment2
+        self.master_moment2[:, self.back_active_node_indices] = temp
+
+        #Calculate the new weights
         w -= learning_rate * self.moment1 / (np.sqrt(self.moment2) + 1e-7)
         return w
 
@@ -219,8 +273,12 @@ class ActivationLayer(Layer):
 
         return
 
-    def update_weights(self):
+    def backward_propagate(self):
+        return
 
+    def update_weights(self):
+        self.optimizer.initialise_dropout(self.back_layer.number_of_nodes,self.number_of_nodes)
+        self.optimizer.dropout(self.back_layer.active_node_indices,self.active_node_indices,self.d_l_w)
         self.active_weights = self.optimizer.optimize(self.active_weights,self.learning_rate,self.d_l_w)
         #Update the weights
         #self.active_weights = self.active_weights - (self.learning_rate * self.d_l_w)  # number_of_active_nodes x number_active_nodes_back_layer
@@ -304,10 +362,20 @@ class OutputLayer(ActivationLayer):
 
 class NeuralNetwork:
 
+    '''
+    Initialise all member variables in the constructor
+    '''
     def __init__(self):
+        #Stores the input layer
         self.input_layer = None
+
+        #A numpy array for storing all the hidden layers
         self.hidden_layers = np.empty([0]).astype(HiddenLayer)
+
+        #The output layer
         self.output_layer = None
+
+        #An array for tracking the loss with each forward pass of the network
         self.loss_log = []
 
     def describe(self):
@@ -317,7 +385,11 @@ class NeuralNetwork:
         self.output_layer.describe()
 
     def add_input(self,input_layer: InputLayer):
-        #Add the input l ayer
+        '''
+        Adds the input layer.
+        :param input_layer: Input Layer object
+        :return:
+        '''
         self.input_layer = input_layer
 
     def add_output(self,output_layer: OutputLayer):
@@ -403,7 +475,7 @@ class NeuralNetwork:
             self.reset_active_nodes()
             #print("who:",self.output_layer.master_weights)
             if i % 1000 == 0:
-                self.get_accuracy(self.output_layer.output, y)
+                print ("Accuracy for epoch",epochs, ":", self.get_accuracy(self.output_layer.output, y))
 
         # The next step is to show the loss
         plt.figure()
@@ -413,7 +485,7 @@ class NeuralNetwork:
         plt.show()
 
 
-        return
+        return self.loss_log
 
     def predict(self, X,y):
         # This is where were train the model.
@@ -423,15 +495,18 @@ class NeuralNetwork:
             l.forward_propagate()
         self.output_layer.forward_propagate()
         y_pred = self.output_layer.output
-        self.get_accuracy(y_pred,y)
-        return
 
+        return self.get_accuracy(y_pred,y)
+
+    '''
+    Code for the get_accuracy came from 
+    http://www.adeveloperdiary.com/data-science/deep-learning/neural-network-with-softmax-in-python/
+    '''
     def get_accuracy(self,y_pred, y_target):
         y_hat = np.argmax(y_pred, axis=1)
         y_true = np.argmax(y_target, axis=1)
         accuracy = (y_hat == y_true).mean()
-        print("Accuracy:", accuracy * 100)
-        return
+        return accuracy
 
 
 digits = ds.load_digits()
@@ -451,14 +526,14 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random
 nn = NeuralNetwork()
 
 nn.add_input(InputLayer("In",64))
-nn.add_hidden(HiddenLayer("H1",10,SigmoidActivation(),GradientDescentOptimizer(),0.01))
+nn.add_hidden(HiddenLayer("H1",5,SigmoidActivation(),AdamOptimizer(),0.01))
 nn.add_output(OutputLayer("Out1",10,SoftmaxActivation(),AdamOptimizer(),0.01))
 
 nn.build()
 epochs = 5000
-dropout_rates = np.random.randint(15,20,epochs)
-nn.train(X_train,y_train,dropout_rates,epochs)
-nn.predict(X_test,y_test)
+dropout_rates = np.random.randint(10,15,epochs)
+loss_log = nn.train(X_train,y_train,dropout_rates,epochs)
+accuracy = nn.predict(X_test,y_test)
 
 
 

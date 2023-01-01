@@ -42,7 +42,7 @@ class Agent:
         print("Shortest path length will take ", pathlength, " seconds")
         shortest_path = np.reshape(shortest_path, [int(len(shortest_path) / 2), 2])
         print("Following this path: ")
-        return self.iterations, shortest_path
+        return self.iterations, shortest_path, self.get_total_pathlength(shortest_path)
 
     def get_pathlength(self, current_cell):
         '''
@@ -157,7 +157,7 @@ class Agent:
             current_cell = [row, col]
             path_array.append(current_cell)
             # print ("Current cell is {0}".format(current_cell))
-        return self.iterations, np.array(path_array)
+        return self.iterations, np.array(path_array), self.get_total_pathlength(np.array(path_array))
 
     def RandomSearch(self):
         '''
@@ -199,7 +199,7 @@ class Agent:
             current_cell = [row, col]
             path_array.append(current_cell)
             # print ("Current cell is {0}".format(current_cell))
-        return self.iterations, np.array(path_array)
+        return self.iterations, np.array(path_array), self.get_total_pathlength(np.array(path_array))
 
     def DijkstrasSearch(self):
         '''
@@ -210,6 +210,7 @@ class Agent:
         path_array:     this tracks the shortest path from the corresponding game floor grid to
                         the destination grid
         '''
+        shortest_path=  []
         self.iterations = 0
         # create an N by M array with all cells, except the start cell, are set to "U" to represent unvisited
         visited_array = np.full((self.max_row + 1, self.max_col + 1), "U")
@@ -262,8 +263,11 @@ class Agent:
                             cur_cell[0, 0], cur_cell[0, 1]]
                         if path_len < path_array[adjcell[0, 0], adjcell[0, 1]]:
                             path_array[adjcell[0, 0], adjcell[0, 1]] = int(path_len)
+                            shortest_path.append([adjcell[0, 0], adjcell[0, 1]])
                 # set the cell to visited as we have checked all of it's neighbours
                 visited_array[cur_cell[0, 0], cur_cell[0, 1]] = "V"
+                print("Row",cur_cell[0,0],"Col",cur_cell[0,1])
+
 
         '''
         print("Game Floor: \n", self.game_floor)
@@ -272,8 +276,15 @@ class Agent:
         '''
         return self.iterations, path_array
 
-rows= 9
-columns = 9
+    def get_total_pathlength(self,path):
+        total_length=  0
+        for i in path:
+            total_length += self.game_floor[i[0],i[1]]
+        return total_length
+
+
+rows= 5
+columns = 5
 seed = 5
 np.random.seed(seed)
 
@@ -284,18 +295,17 @@ grid = np.random.randint(0,9,size=(rows,columns))
 print(grid)
 my = Agent(grid, seed)
 
-iterations, shortest_path = my.RandomSearch()
-print("For Random Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path)
+iterations, shortest_path, path_length = my.RandomSearch()
+print("For Random Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path, "with length", path_length)
 
-iterations, shortest_path = my.SimpleSearch()
-print("For Simple Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path)
+iterations, shortest_path, path_length  = my.SimpleSearch()
+print("For Simple Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path, "with length", path_length)
 
-iterations, shortest_path = my.FastSearch()
-print("For Fast Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path)
+iterations, shortest_path, path_length  = my.FastSearch()
+print("For Fast Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path, "with length", path_length)
 
 iterations, shortest_path =my.DijkstrasSearch()
-print("For Dijkstras Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path)
-
+print("For Dijkstras Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path, "with length", path_length)
 
 
 
