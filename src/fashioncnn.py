@@ -13,6 +13,8 @@ from sklearn.preprocessing import OneHotEncoder
 import matplotlib.pyplot as plt
 from torch.utils.data import  random_split
 from torch.nn.functional import log_softmax
+from datetime import datetime
+from torch.nn.functional import cross_entropy
 
 
 
@@ -48,12 +50,14 @@ class FashionCNN(nn.Module):
         super().__init__()
         self.conv_unit_1 = nn.Sequential(
             nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
 
         # Second unit of convolution
         self.conv_unit_2 = nn.Sequential(
             nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
 
@@ -86,6 +90,18 @@ def preview_images(preview_dl):
         plt.show()
         break
 
+'''
+Calculate the accuracy
+'''
+def get_accuracy(outputs, labels):
+    #As we are using softmax, get the column with the largest value. This
+    #will correspond to the prediction
+    values, indices = torch.max(outputs, dim=1)
+
+    #Get the total number of rows that match and divide by the number of
+    #indices to give an average accuracy
+    return torch.tensor(torch.sum(indices == labels).item() / len(indices))
+
 df = pd.read_csv("../data/fashion/fashion-mnist_train.csv")
 
 # Get the labels
@@ -112,33 +128,94 @@ train_dataset,test_dataset =  random_split(fashion_ds,[0.8,0.2])
 train_loader = DataLoader(train_dataset, 10, shuffle = True)
 test_loader =  DataLoader(test_dataset, 10, shuffle = True)
 
+master_metrics_log = np.empty((0, 4), float)
+
 #Create Model  instance
 model = FashionCNN()
-
-#Define Loss and optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
-
+#For this we will use CrossEntropyLoss with a SGD optimizer
+optimizer = torch.optim.SGD(model.parameters(), lr=0.001)
 num_epochs = 10
 # Train the model
 total_step = len(train_loader)
+
 for epoch in range(num_epochs):
     print("Epoch:",epoch)
-    for i,batch in enumerate(train_loader):
-        images = batch[0]
-        labels = batch[1]
+    start = datetime.now()
+    accuracy_log = []
+    loss_log = []
+    accuracy = 0
+    loss = 0
+    for batch in train_loader:
+        #Get the images and labels
+        images, labels = batch
         # Forward pass
         outputs = model(images)
-        loss = criterion(outputs, labels)
-        # Backward and optimize
+        #Calculate the accuracy and loss
+        accuracy = get_accuracy(outputs,labels)
+        loss = cross_entropy(outputs, labels)
+        accuracy_log.append(accuracy)
+        loss_log.append(loss)
+        # Back propagate and optimize
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-    #After each epoch print Train loss and validation loss + accuracy
-    print ('Epoch [{}/{}], Loss: {:.4f}' .format(epoch+1, num_epochs, loss.item()))
+    #After each epoch print Loss and Accuracy
+    print("Completed epoch:", epoch, "in:",datetime.now() - start)
+    accuracies = torch.stack(accuracy_log).mean().item()*100
+    losses = torch.stack(loss_log).mean().item()
+    master_metrics_log = np.append(master_metrics_log,np.array([["SGD",epoch,losses,accuracies]]),0)
+
+#Create Model  instance
+model = FashionCNN()
+#For this we will use CrossEntropyLoss with a SGD optimizer
+lossanalyzer = nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+num_epochs = 10
+# Train the model
 
 
+for epoch in range(num_epochs):
+    print("Epoch:",epoch)
+    start = datetime.now()
+    accuracy_log = []
+    loss_log = []
+    accuracy = 0
+    loss = 0
+    for batch in train_loader:
+        #Get the images and labels
+        images, labels = batch
+        # Forward pass
+        outputs = model(images)
+        #Calculate the accuracy and loss
+        accuracy = get_accuracy(outputs,labels)
+        loss = lossanalyzer(outputs, labels)
+        accuracy_log.append(accuracy)
+        loss_log.append(loss)
+        # Back propagate and optimize
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+    #After each epoch print Loss and Accuracy
+    print("Completed epoch:", epoch, "in:",datetime.now() - start)
+    accuracies = torch.stack(accuracy_log).mean().item() * 100
+    losses = torch.stack(loss_log).mean().item()
+    master_metrics_log = np.append(master_metrics_log,np.array([["Adam",epoch,losses,accuracies]]),0)
+
+plt.figure(figsize=(16,12))
+plt.plot(master_metrics_log[master_metrics_log[:,0]=="SGD"][:, 1].astype(float), master_metrics_log[master_metrics_log[:,0]=="SGD"][:, 2].astype(float),label="SGD")
+plt.plot(master_metrics_log[master_metrics_log[:,0]=="Adam"][:, 1].astype(float), master_metrics_log[master_metrics_log[:,0]=="Adam"][:, 2].astype(float),label="Adam")
+plt.xlabel("Number of Epochs")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
+
+plt.figure(figsize=(16,12))
+plt.plot(master_metrics_log[master_metrics_log[:,0]=="SGD"][:, 1].astype(float), master_metrics_log[master_metrics_log[:,0]=="SGD"][:, 3].astype(float),label="SGD")
+plt.plot(master_metrics_log[master_metrics_log[:,0]=="Adam"][:, 1].astype(float), master_metrics_log[master_metrics_log[:,0]=="Adam"][:, 3].astype(float),label="Adam")
+plt.xlabel("Number of Epochs")
+plt.ylabel("Accuracy")
+plt.legend()
+plt.show()
 
 
 

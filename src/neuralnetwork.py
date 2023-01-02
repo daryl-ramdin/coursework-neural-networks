@@ -7,6 +7,8 @@ from sklearn import metrics
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import ConfusionMatrixDisplay
 
 from sklearn.datasets import make_blobs
 import matplotlib.pyplot as plt
@@ -245,7 +247,9 @@ class ActivationLayer(Layer):
         return
 
     def create_weight_matrices(self):
-        """ A method to initialize the weight matrices of the neural network"""
+        #Initialize the weight matrices of the neural network
+        #This code was based on INM 702 (2022), Lab06_3, City, University of London
+        #https://moodle.city.ac.uk/pluginfile.php/2974721/mod_folder/content/0/Lab06_3.ipynb?forcedownload=1
         np.random.seed(42)
         rad = 1 / np.sqrt(self.back_layer.number_of_nodes)
         mean=0
@@ -360,7 +364,7 @@ class OutputLayer(ActivationLayer):
             self.d_l_w = np.dot(self.d_l_z.T, self.d_z_w)  # number_of_nodes x number_nodes_back_layer
         return
 
-class NeuralNetwork:
+class MyNeuralNetwork:
 
     '''
     Initialise all member variables in the constructor
@@ -377,6 +381,9 @@ class NeuralNetwork:
 
         #An array for tracking the loss with each forward pass of the network
         self.loss_log = []
+
+        #An array for tracking the accuracy with each forward pass of the network
+        self.accuracy_log = []
 
     def describe(self):
         self.input_layer.describe()
@@ -403,7 +410,7 @@ class NeuralNetwork:
             l.forward_propagate()
         self.output_layer.forward_propagate()
         cost = -np.mean(self.output_layer.target * np.log(self.output_layer.output + 1e-8))
-        self.loss_log.append(cost)
+        return cost
 
     def backward_propagate(self):
         self.output_layer.back_propagate()
@@ -465,27 +472,26 @@ class NeuralNetwork:
         # Set the data and target
         self.input_layer.set_data(X)
         self.output_layer.set_target(y)
+        accuracy = 0
 
         #print("who:",self.output_layer.master_weights)
         for i in range(epochs):
             #At the start of each epoch we drop nodes
             self.dropout(dropout_rates[i])
-            self.forward_propagate()
+            cost = self.forward_propagate()
             self.backward_propagate()
             self.reset_active_nodes()
-            #print("who:",self.output_layer.master_weights)
-            if i % 1000 == 0:
-                print ("Accuracy for epoch",epochs, ":", self.get_accuracy(self.output_layer.output, y))
 
-        # The next step is to show the loss
-        plt.figure()
-        plt.plot(np.arange(len(self.loss_log)), self.loss_log)
-        plt.xlabel("epochs")
-        plt.ylabel("cost")
-        plt.show()
+            if i % 10 == 0:
+                self.loss_log.append(cost)
+                accuracy = self.get_accuracy(self.output_layer.output, y)
+                self.accuracy_log.append(accuracy)
+                print ("Accuracy for epoch",epochs, ":", accuracy)
 
+            if i % 100 == 0:
+                print("Accuracy for epoch", epochs, ":", accuracy)
 
-        return self.loss_log
+        return self.loss_log, self.accuracy_log
 
     def predict(self, X,y):
         # This is where were train the model.
@@ -509,31 +515,18 @@ class NeuralNetwork:
         return accuracy
 
 
-digits = ds.load_digits()
-X = digits.data
-y = digits.target
-
-onehot_encoder = OneHotEncoder(sparse_output=False)
-y = np.reshape(y,(-1,1))
-y = onehot_encoder.fit_transform(y)
+def get_train_test():
+    digits = ds.load_digits()
+    X = digits.data
+    y = digits.target
 
 
-X = X/255
+    onehot_encoder = OneHotEncoder(sparse_output=False)
+    y = np.reshape(y, (-1, 1))
+    y = onehot_encoder.fit_transform(y)
+    y = np.array(y).astype(int)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+    #We do a simple normalization of our data
+    X = X / 255
 
-
-nn = NeuralNetwork()
-
-nn.add_input(InputLayer("In",64))
-nn.add_hidden(HiddenLayer("H1",5,SigmoidActivation(),AdamOptimizer(),0.01))
-nn.add_output(OutputLayer("Out1",10,SoftmaxActivation(),AdamOptimizer(),0.01))
-
-nn.build()
-epochs = 5000
-dropout_rates = np.random.randint(10,15,epochs)
-loss_log = nn.train(X_train,y_train,dropout_rates,epochs)
-accuracy = nn.predict(X_test,y_test)
-
-
-
+    return train_test_split(X, y, test_size=0.20, random_state=42)

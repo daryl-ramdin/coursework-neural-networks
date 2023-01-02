@@ -1,6 +1,22 @@
 import numpy as np
 
 
+class Node:
+    def __init__(self, row,col):
+        self.row = row
+        self.id = str(row)+","+str(col)
+        self.col = col
+        self.nearest_neighbour = self
+
+    def set_neighbour(self, neighbour):
+        self.nearest_neighbour = neighbour
+
+def find_node(node_list, row, col):
+    id = str(row)+","+str(col)
+    for node in node_list:
+        if node.id == id: return node
+    return None
+
 class Agent:
     '''
     This represents that agent that has to traverse the grid in the shortest possible time.
@@ -42,6 +58,7 @@ class Agent:
         print("Shortest path length will take ", pathlength, " seconds")
         shortest_path = np.reshape(shortest_path, [int(len(shortest_path) / 2), 2])
         print("Following this path: ")
+        shortest_path = np.delete(shortest_path,0,0)
         return self.iterations, shortest_path, self.get_total_pathlength(shortest_path)
 
     def get_pathlength(self, current_cell):
@@ -210,7 +227,15 @@ class Agent:
         path_array:     this tracks the shortest path from the corresponding game floor grid to
                         the destination grid
         '''
-        shortest_path=  []
+
+
+        all_nodes = []
+        for cur_row in range(0, self.max_row + 1):
+            for cur_col in range(0, self.max_col + 1):
+                nd = Node(cur_row,cur_col)
+                all_nodes.append(nd)
+
+
         self.iterations = 0
         # create an N by M array with all cells, except the start cell, are set to "U" to represent unvisited
         visited_array = np.full((self.max_row + 1, self.max_col + 1), "U")
@@ -263,10 +288,22 @@ class Agent:
                             cur_cell[0, 0], cur_cell[0, 1]]
                         if path_len < path_array[adjcell[0, 0], adjcell[0, 1]]:
                             path_array[adjcell[0, 0], adjcell[0, 1]] = int(path_len)
-                            shortest_path.append([adjcell[0, 0], adjcell[0, 1]])
+                            #The current cell is the closest to the adjacent cell so update its nearest neighbour
+                            node = find_node(all_nodes,int(adjcell[0, 0]),int(adjcell[0, 1]) )
+                            nearest_neighbour = find_node(all_nodes,int(cur_cell[0, 0]),int(cur_cell[0, 1]))
+                            node.set_neighbour(nearest_neighbour)
+
                 # set the cell to visited as we have checked all of it's neighbours
                 visited_array[cur_cell[0, 0], cur_cell[0, 1]] = "V"
-                print("Row",cur_cell[0,0],"Col",cur_cell[0,1])
+
+        #Get the shortest path
+        shortest_path = np.array([[self.max_row-1,self.max_col-1]])
+        last_node = find_node(all_nodes,self.max_row-1,self.max_col-1)
+        nearest_neighbour = last_node.nearest_neighbour
+
+        while nearest_neighbour != None:
+            np.insert(shortest_path,0,np.array([[nearest_neighbour.row,nearest_neighbour.col]]),0)
+            nearest_neighbour = nearest_neighbour.nearest_neighbour
 
 
         '''
@@ -274,38 +311,15 @@ class Agent:
         print("Visited Array: \n", visited_array)
         print("Path: \n",path_array.astype(int))
         '''
-        return self.iterations, path_array
+        return self.iterations, path_array, shortest_path
 
     def get_total_pathlength(self,path):
-        total_length=  0
+        total_length =  0
         for i in path:
             total_length += self.game_floor[i[0],i[1]]
         return total_length
 
 
-rows= 5
-columns = 5
-seed = 5
-np.random.seed(seed)
-
-
-
-grid = np.random.randint(0,9,size=(rows,columns))
-#grid = np.array([[0,0,0],[9,9,0],[0,0,0],[0,9,9],[0,0,0]])
-print(grid)
-my = Agent(grid, seed)
-
-iterations, shortest_path, path_length = my.RandomSearch()
-print("For Random Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path, "with length", path_length)
-
-iterations, shortest_path, path_length  = my.SimpleSearch()
-print("For Simple Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path, "with length", path_length)
-
-iterations, shortest_path, path_length  = my.FastSearch()
-print("For Fast Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path, "with length", path_length)
-
-iterations, shortest_path =my.DijkstrasSearch()
-print("For Dijkstras Search: \n", "Iterations: " , iterations, "\n Shortest Path: ", shortest_path, "with length", path_length)
 
 
 
