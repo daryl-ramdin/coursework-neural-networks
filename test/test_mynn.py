@@ -13,7 +13,7 @@ def test_simple():
 
     learning_rate = 0.01
     lower_drop_rate = 5
-    upper_drop_rate = 10 #This means no dropout
+    upper_drop_rate = 10
 
     mynn = nn.MyNeuralNetwork()
     mynn.add_input(nn.InputLayer("In",64))
@@ -31,14 +31,6 @@ def test_simple():
     accuracy = mynn.predict(X_test,y_test) * 100
     master_accuracy_log = np.append(master_accuracy_log,np.array([[epochs,accuracy]]),0)
 
-    # The next step is to show the loss
-    plt.figure()
-    #plt.plot(np.arange(len(loss_log)), loss_log,label="Loss")
-    plt.plot(master_accuracy_log[:,0], master_accuracy_log[:,1])
-    plt.xlabel("Number of Epochs")
-    plt.ylabel("Accuracy")
-    plt.show()
-
 def test_epochs():
     '''
     This function is used to test the effect of the epochs on the accuracy of the neural
@@ -48,18 +40,18 @@ def test_epochs():
     X_train, X_test, y_train, y_test = nn.get_train_test()
 
     learning_rate = 0.01
-    lower_drop_rate = 5
-    upper_drop_rate = 10 #This means no dropout
+    lower_drop_rate = 0
+    upper_drop_rate = 1
 
     mynn = nn.MyNeuralNetwork()
     mynn.add_input(nn.InputLayer("In",64))
-    mynn.add_hidden(nn.HiddenLayer("H1",5,nn.SigmoidActivation(),nn.GradientDescentOptimizer(),learning_rate))
-    mynn.add_output(nn.OutputLayer("Out1",10,nn.SoftmaxActivation(),nn.GradientDescentOptimizer(),learning_rate))
+    mynn.add_hidden(nn.HiddenLayer("H1",5,nn.SigmoidActivation(),nn.AdamOptimizer(),learning_rate))
+    mynn.add_output(nn.OutputLayer("Out1",10,nn.SoftmaxActivation(),nn.AdamOptimizer(),learning_rate))
 
 
     master_accuracy_log = np.empty((0,2),float)
 
-    for i in range(1000,15000,1000):
+    for i in range(1000,11000,1000):
         mynn.build()
         epochs = i
         dropout_rates = np.random.randint(lower_drop_rate, upper_drop_rate, epochs)
@@ -93,8 +85,8 @@ def test_hidden_layer_node_count():
         mynn = nn.MyNeuralNetwork()
 
         mynn.add_input(nn.InputLayer("In", 64))
-        mynn.add_hidden(nn.HiddenLayer("H1", hidden_node_count, nn.SigmoidActivation(), nn.GradientDescentOptimizer(), learning_rate))
-        mynn.add_output(nn.OutputLayer("Out1", 10, nn.SoftmaxActivation(), nn.GradientDescentOptimizer(), learning_rate))
+        mynn.add_hidden(nn.HiddenLayer("H1", hidden_node_count, nn.SigmoidActivation(), nn.AdamOptimizer(), learning_rate))
+        mynn.add_output(nn.OutputLayer("Out1", 10, nn.SoftmaxActivation(), nn.AdamOptimizer(), learning_rate))
 
         mynn.build()
         dropout_rates = np.random.randint(lower_drop_rate, upper_drop_rate, epochs)
@@ -129,8 +121,8 @@ def test_hidden_layer_count():
 
         mynn.add_input(nn.InputLayer("In", 64))
         for j in range(0,layer_count):
-            mynn.add_hidden(nn.HiddenLayer("H"+str(layer_count), 5, nn.SigmoidActivation(), nn.GradientDescentOptimizer(), learning_rate))
-        mynn.add_output(nn.OutputLayer("Out1", 10, nn.SoftmaxActivation(), nn.GradientDescentOptimizer(), learning_rate))
+            mynn.add_hidden(nn.HiddenLayer("H"+str(layer_count), 5, nn.SigmoidActivation(), nn.AdamOptimizer(), learning_rate))
+        mynn.add_output(nn.OutputLayer("Out1", 10, nn.SoftmaxActivation(), nn.AdamOptimizer(), learning_rate))
 
         mynn.build()
         dropout_rates = np.random.randint(lower_drop_rate, upper_drop_rate, epochs)
@@ -146,46 +138,4 @@ def test_hidden_layer_count():
     plt.ylabel("Accuracy")
     plt.show()
 
-def test_adam_gd():
-    '''
-    This function is used to test the effect of the epochs on the accuracy of the neural
-    network
-    :return:
-    '''
-    X_train, X_test, y_train, y_test = nn.get_train_test()
-
-    learning_rate = 0.01
-    lower_drop_rate = 0
-    upper_drop_rate = 1 #This means no dropout
-
-    activations = np.array([[nn.GradientDescentOptimizer(),nn.GradientDescentOptimizer()],
-                            [nn.AdamOptimizer(),nn.AdamOptimizer()]])
-
-
-
-    master_accuracy_log = np.empty((0,2),float)
-
-    for i in range(len(activations)):
-        mynn = nn.MyNeuralNetwork()
-        mynn.add_input(nn.InputLayer("In", 64))
-        mynn.add_hidden(nn.HiddenLayer("H1", 5, nn.SigmoidActivation(), activations[i,0], learning_rate))
-        mynn.add_output(
-            nn.OutputLayer("Out1", 10, nn.SoftmaxActivation(), activations[i,1], learning_rate))
-
-        mynn.build()
-        epochs = 2000
-        dropout_rates = np.random.randint(lower_drop_rate, upper_drop_rate, epochs)
-        loss_log,accuracy_log = mynn.train(X_train,y_train,dropout_rates,epochs)
-        accuracy = mynn.predict(X_test,y_test) * 100
-        master_accuracy_log = np.append(master_accuracy_log,np.array([[i,accuracy]]),0)
-
-    # The next step is to show the loss
-    print(master_accuracy_log)
-    plt.figure()
-    #plt.plot(np.arange(len(loss_log)), loss_log,label="Loss")
-    plt.bar(master_accuracy_log[:,0], master_accuracy_log[:,1])
-    plt.xlabel("Activation: 0: GD, 1: Adam")
-    plt.ylabel("Accuracy")
-    plt.show()
-
-test_simple()
+test_hidden_layer_count()

@@ -6,7 +6,7 @@ class Node:
         self.row = row
         self.id = str(row)+","+str(col)
         self.col = col
-        self.nearest_neighbour = self
+        self.nearest_neighbour = None
 
     def set_neighbour(self, neighbour):
         self.nearest_neighbour = neighbour
@@ -133,7 +133,7 @@ class Agent:
         '''
         For the simple search we keep comparing the bottom and right adjacent cells
         and moving to the cell with the shortest path. If both the right and bottom
-        have the same length, we go in the direction given by the preference
+        have the same length, we move right.
         :return:
         '''
         path_array = []
@@ -149,7 +149,7 @@ class Agent:
         current_cell = [0, 0]
 
         # Let's start our search until we reach the end
-        while last_grid != current_cell and i < 25:
+        while last_grid != current_cell:
             self.iterations += 1
             if (row + 1) > max_row:
                 # We're at the bottom of the grid so we move right
@@ -164,11 +164,11 @@ class Agent:
                 row += 1
                 # print("Move down")
             elif self.game_floor[row, col + 1] <= self.game_floor[row + 1, col]:
-                # The cell to the right is faster to move right
+                # The cell to the right is faster or the same so move right
                 col += 1
                 # print("Move right")
             else:
-                # the bottom and right are the same so we
+                # This does nothing
                 i += 1
 
             current_cell = [row, col]
@@ -297,21 +297,22 @@ class Agent:
                 visited_array[cur_cell[0, 0], cur_cell[0, 1]] = "V"
 
         #Get the shortest path
-        shortest_path = np.array([[self.max_row-1,self.max_col-1]])
-        last_node = find_node(all_nodes,self.max_row-1,self.max_col-1)
+        shortest_path = np.array([[self.max_row,self.max_col]])
+        last_node = find_node(all_nodes,self.max_row,self.max_col)
         nearest_neighbour = last_node.nearest_neighbour
 
         while nearest_neighbour != None:
-            np.insert(shortest_path,0,np.array([[nearest_neighbour.row,nearest_neighbour.col]]),0)
+            step = np.array([[nearest_neighbour.row,nearest_neighbour.col]])
+            shortest_path = np.insert(shortest_path,0,step,0)
             nearest_neighbour = nearest_neighbour.nearest_neighbour
 
-
+        shortest_path = np.delete(shortest_path,0,0)
         '''
         print("Game Floor: \n", self.game_floor)
         print("Visited Array: \n", visited_array)
         print("Path: \n",path_array.astype(int))
         '''
-        return self.iterations, path_array, shortest_path
+        return self.iterations, shortest_path, self.get_total_pathlength(shortest_path)
 
     def get_total_pathlength(self,path):
         total_length =  0

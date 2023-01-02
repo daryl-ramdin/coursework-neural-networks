@@ -16,7 +16,13 @@ import random
 from sklearn.preprocessing import StandardScaler
 
 class Optimizer:
-    def __init__(self):
+    def __init__(self,max_strikes=5):
+        #Initialise the average accuracy and strikes
+        self.average_accuracy = 0
+        #Once the max_strikes are passed, we stop training
+        self.max_strikes = max_strikes
+        #This stores the current strike count
+        self.current_strike = 0
         return
 
     def optimize(self,w,learning_rate,dw):
@@ -33,6 +39,25 @@ class Optimizer:
     '''
     def dropout(self,back_active_node_indices, active_node_indices,dw):
         return
+
+    def check_to_stop(self,accuracy):
+        #This is the base stopping criteria
+        average_accuracy = (self.average_accuracy+accuracy)/2
+
+        if average_accuracy < self.average_accuracy:
+            #Our accuracy decreasign so increase the strike count
+            self.current_strike +=1
+        else:
+            #Our accuracy increased so reset the current_strike as we are looking
+            #for consecutive strikes
+            self.current_strike = 0
+
+        if self.current_strike == self.max_strikes:
+            #We have reached the limit so stop
+            return True
+        else:
+            return False
+
 
 
 class GradientDescentOptimizer(Optimizer):
@@ -96,7 +121,6 @@ class AdamOptimizer(Optimizer):
         #Calculate the new weights
         w -= learning_rate * self.moment1 / (np.sqrt(self.moment2) + 1e-7)
         return w
-
 
 class ActivationFunction:
     def __init__(self,type):
@@ -479,17 +503,20 @@ class MyNeuralNetwork:
             #At the start of each epoch we drop nodes
             self.dropout(dropout_rates[i])
             cost = self.forward_propagate()
+            accuracy = self.get_accuracy(self.output_layer.output, y)
+            self.accuracy_log.append(accuracy)
+            self.loss_log.append(cost)
+            if self.output_layer.optimizer.check_to_stop(accuracy)== True:
+                print("Early Stopping")
+                break
             self.backward_propagate()
             self.reset_active_nodes()
 
-            if i % 10 == 0:
-                self.loss_log.append(cost)
-                accuracy = self.get_accuracy(self.output_layer.output, y)
-                self.accuracy_log.append(accuracy)
-                print ("Accuracy for epoch",epochs, ":", accuracy)
 
             if i % 100 == 0:
-                print("Accuracy for epoch", epochs, ":", accuracy)
+                #accuracy = self.get_accuracy(self.output_layer.output, y)
+                print ("Accuracy for epoch",epochs, ":", accuracy)
+                print("Loss for epoch", epochs, ":", accuracy)
 
         return self.loss_log, self.accuracy_log
 
