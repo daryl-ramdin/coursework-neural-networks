@@ -1,3 +1,21 @@
+This repository contains the code for the following:
+
+Custom Built Neural Network from scratcgh using numpy: neuralnetwork.py
+A convolutional neural network built with Pytorch for training on the MINST Fashion Dataset: fashioncnn.py
+A convolutional neural network built with Pytorch for predicting the weather from a dataset of images: weathercnn.py
+
+
+
+
+
+
+
+
+
+
+
+
+
 The first step is to install the necessary libraries.
 The following would normally have to be installed
 
