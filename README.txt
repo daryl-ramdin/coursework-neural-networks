@@ -5,16 +5,7 @@ A convolutional neural network built with Pytorch for training on the MINST Fash
 A convolutional neural network built with Pytorch for predicting the weather from a dataset of images: weathercnn.py
 
 
-
-
-
-
-
-
-
-
-
-
+Directions:
 
 The first step is to install the necessary libraries.
 The following would normally have to be installed
