@@ -273,7 +273,6 @@ class ActivationLayer(Layer):
     def create_weight_matrices(self):
         #Initialize the weight matrices of the neural network
         #This code was based on INM 702 (2022), Lab06_3, City, University of London
-        #https://moodle.city.ac.uk/pluginfile.php/2974721/mod_folder/content/0/Lab06_3.ipynb?forcedownload=1
         np.random.seed(42)
         rad = 1 / np.sqrt(self.back_layer.number_of_nodes)
         mean=0
