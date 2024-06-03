@@ -177,7 +177,6 @@ def create_annotations():
 '''
 This function allows us to see a subset of the images.
 Code Reference: INM702 2022, LAB09_4
-https://moodle.city.ac.uk/pluginfile.php/2994042/mod_folder/content/0/Lab09_4.ipynb?forcedownload=1
 '''
 def preview_images(preview_dl):
     """Plot images grid of single batch"""
