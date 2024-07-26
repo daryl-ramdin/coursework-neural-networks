@@ -1,6 +1,6 @@
 This repository contains the code for various coursework projects on Neural Networks while doing my masters degree at City, University of London. They are as follows:
 
-Custom Built Neural Network from scratcgh using numpy: neuralnetwork.py
+Built from scratch Neural Network using numpy: neuralnetwork.py
 A convolutional neural network built with Pytorch for training on the MINST Fashion Dataset: fashioncnn.py
 A convolutional neural network built with Pytorch for predicting the weather from a dataset of images: weathercnn.py
 An evaluation of Dijkstra's algorithm over a random and simple search for finding the shortest path between two points. No neural network used.
